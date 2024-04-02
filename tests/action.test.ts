@@ -42,6 +42,8 @@ function setDefaultInputs() {
   vi.stubEnv('INPUT_TF_SCOPE', 'public');
   // environment_settings - Pass specific settings, like post-install-script, to the testing environment
   vi.stubEnv('INPUT_ENVIRONMENT_SETTINGS', '{}');
+  // tmt_hardware - A value of tmt.hardware variable
+  vi.stubEnv('INPUT_HARDWARE', '{}');
   // pr_head_sha - HEAD SHA of a Pull Request. Used for posting statuses to the PR. The value is obtained from `git rev-parse HEAD` if this input is not set
   vi.stubEnv('INPUT_PR_HEAD_SHA', '');
   // Action is waiting for testing farm to finish or until timeout is reached

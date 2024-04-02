@@ -13,7 +13,7 @@ import { setTimeout } from 'timers/promises';
 import { TFError } from './error';
 import { PullRequest } from './pull-request';
 import { setTfArtifactUrl, setTfRequestId } from './state';
-import { composeStatusDescription, getSummary } from './util';
+import { composeStatusDescription, getSummary, isJsonString } from './util';
 
 import {
   envSettingsSchema,
@@ -26,6 +26,7 @@ import {
   tmtEnvSecretsSchema,
   tmtEnvVarsSchema,
   tmtPlanRegexSchema,
+  tmtDiskSchema,
 } from './schema/input';
 import {
   RequestDetails,
@@ -71,10 +72,26 @@ async function action(pr: PullRequest): Promise<void> {
     ? tmtArtifactsSchema.parse(tmtArtifactsParsed.data)
     : [];
 
+  // Generate tmt hardware specification
+  // See https://tmt.readthedocs.io/en/stable/spec/plans.html#hardware
+  // https://gitlab.com/testing-farm/docs/root/-/merge_requests/120/diffs?view=inline
+
+  const tmtHardwareParsed = isJsonString(getInput('tmt_hardware'));
+  const tmtHardware = tmtHardwareParsed == true
+    ? JSON.parse(getInput('tmt_hardware')) : {};
+
+  // Generate tmt disk specification
+  const tmtDiskParsed = tmtDiskSchema.safeParse(getInput('tmt_disk'));
+
+  const tmtDisk = tmtDiskParsed.success
+    ? tmtDiskSchema.parse(tmtDiskParsed.data)
+    : {};
+
   // Generate tmt context
   const tmtContextParsed = tmtContextInputSchema.safeParse(
     getInput('tmt_context')
   );
+
   const tmtContext = tmtContextParsed.success
     ? tmtContextSchema.parse(tmtContextParsed.data)
     : undefined;
@@ -113,6 +130,8 @@ async function action(pr: PullRequest): Promise<void> {
         settings: envSettings,
         secrets: tmtEnvSecrets,
         artifacts: tmtArtifacts,
+        hardware: tmtHardware,
+        disk: tmtDisk,
         tmt: {
           ...(tmtContext ? { context: tmtContext } : {}),
         },
