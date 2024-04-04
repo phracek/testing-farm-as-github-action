@@ -34,10 +34,6 @@ export const tmtArtifactsInputSchema = stringToArraySchema.transform(arr => {
 });
 export const tmtContextInputSchema = keyValueArrayToObjectSchema;
 
-export const tmtDiskSchema = z.object({
-  size: z.string().min(1).optional(),
-});
-
 // https://testing-farm.gitlab.io/api/#operation/requestsPost
 export const tmtArtifactsSchema = z
   .array(

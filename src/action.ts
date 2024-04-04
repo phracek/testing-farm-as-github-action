@@ -26,7 +26,6 @@ import {
   tmtEnvSecretsSchema,
   tmtEnvVarsSchema,
   tmtPlanRegexSchema,
-  tmtDiskSchema,
 } from './schema/input';
 import {
   RequestDetails,
@@ -80,13 +79,6 @@ async function action(pr: PullRequest): Promise<void> {
   const tmtHardware = tmtHardwareParsed == true
     ? JSON.parse(getInput('tmt_hardware')) : {};
 
-  // Generate tmt disk specification
-  const tmtDiskParsed = tmtDiskSchema.safeParse(getInput('tmt_disk'));
-
-  const tmtDisk = tmtDiskParsed.success
-    ? tmtDiskSchema.parse(tmtDiskParsed.data)
-    : {};
-
   // Generate tmt context
   const tmtContextParsed = tmtContextInputSchema.safeParse(
     getInput('tmt_context')
@@ -131,7 +123,6 @@ async function action(pr: PullRequest): Promise<void> {
         secrets: tmtEnvSecrets,
         artifacts: tmtArtifacts,
         hardware: tmtHardware,
-        disk: tmtDisk,
         tmt: {
           ...(tmtContext ? { context: tmtContext } : {}),
         },
