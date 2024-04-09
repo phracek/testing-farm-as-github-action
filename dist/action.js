@@ -3,7 +3,7 @@ import TestingFarmAPI from 'testing-farm';
 import { setTimeout } from 'timers/promises';
 import { TFError } from './error';
 import { setTfArtifactUrl, setTfRequestId } from './state';
-import { composeStatusDescription, getSummary } from './util';
+import { composeStatusDescription, getSummary, isJsonString } from './util';
 import { envSettingsSchema, tfScopeSchema, timeoutSchema, tmtArtifactsInputSchema, tmtArtifactsSchema, tmtContextInputSchema, tmtContextSchema, tmtEnvSecretsSchema, tmtEnvVarsSchema, tmtPlanRegexSchema, } from './schema/input';
 import { requestDetailsSchema, requestSchema, } from './schema/testing-farm-api';
 async function action(pr) {
@@ -31,6 +31,11 @@ async function action(pr) {
     const tmtArtifacts = tmtArtifactsParsed.success
         ? tmtArtifactsSchema.parse(tmtArtifactsParsed.data)
         : [];
+    // Generate tmt hardware specification
+    // See https://tmt.readthedocs.io/en/stable/spec/plans.html#hardware
+    // https://gitlab.com/testing-farm/docs/root/-/merge_requests/120/diffs?view=inline
+    const tmtHardwareParsed = isJsonString(getInput('tmt_hardware'));
+    const tmtHardware = tmtHardwareParsed == true ? JSON.parse(getInput('tmt_hardware')) : {};
     // Generate tmt context
     const tmtContextParsed = tmtContextInputSchema.safeParse(getInput('tmt_context'));
     const tmtContext = tmtContextParsed.success
@@ -64,8 +69,15 @@ async function action(pr) {
             },
         ],
     };
-    // The strict mode should be enabled once https://github.com/redhat-plumbers-in-action/testing-farm/issues/71 is fixed
-    const tfResponseRaw = await api.newRequest(request, false);
+    let tfResponseRaw;
+    // Use newRequest method in case tmt_hardware is not defined or parameter is not properly formatted
+    if (tmtHardwareParsed === false || getInput('tmt_hardware') === '') {
+        tfResponseRaw = await api.newRequest(request, false);
+    }
+    else {
+        // The strict mode should be enabled once https://github.com/redhat-plumbers-in-action/testing-farm/issues/71 is fixed
+        tfResponseRaw = await api.unsafeNewRequest(Object.assign(Object.assign({}, request), { environments: [Object.assign(Object.assign({}, request.environments[0]), { hardware: tmtHardware })] }));
+    }
     // Remove all secrets from request before printing it
     delete request.api_key;
     request.environments.map((env) => delete env.secrets);

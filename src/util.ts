@@ -21,12 +21,11 @@ export function getSummary(result: unknown): string {
   return parsedResult.success ? ` - ${parsedResult.data.summary}` : '';
 }
 
-export function isJsonString(hardware: string) {
-    const parsedResult = z
-    try {
-        JSON.parse(hardware);
-    } catch (e) {
-        return false;
-    }
-    return true
+export function isJsonString(hardware: string): boolean {
+  try {
+    JSON.parse(hardware);
+  } catch (e) {
+    return false;
+  }
+  return true;
 }

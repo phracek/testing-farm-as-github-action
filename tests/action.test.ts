@@ -42,8 +42,6 @@ function setDefaultInputs() {
   vi.stubEnv('INPUT_TF_SCOPE', 'public');
   // environment_settings - Pass specific settings, like post-install-script, to the testing environment
   vi.stubEnv('INPUT_ENVIRONMENT_SETTINGS', '{}');
-  // tmt_hardware - A value of tmt.hardware variable
-  vi.stubEnv('INPUT_HARDWARE', '{}');
   // pr_head_sha - HEAD SHA of a Pull Request. Used for posting statuses to the PR. The value is obtained from `git rev-parse HEAD` if this input is not set
   vi.stubEnv('INPUT_PR_HEAD_SHA', '');
   // Action is waiting for testing farm to finish or until timeout is reached
@@ -54,6 +52,7 @@ const mocks = vi.hoisted(() => {
   return {
     request: vi.fn(),
     newRequest: vi.fn(),
+    unsafeNewRequest: vi.fn(),
     requestDetails: vi.fn(),
     setTimeout: vi.fn(),
     TFError: vi.fn((message: string, url?: string | undefined) => {
@@ -77,6 +76,7 @@ vi.mock('@octokit/core', () => {
 vi.mock('testing-farm', async () => {
   const TestingFarmAPI = vi.fn(() => ({
     newRequest: mocks.newRequest,
+    unsafeNewRequest: mocks.unsafeNewRequest,
     requestDetails: mocks.requestDetails,
   }));
   return { default: TestingFarmAPI };
@@ -195,6 +195,145 @@ describe('Integration tests - action.ts', () => {
     // Mock Testing Farm API
     vi.mocked(mocks.newRequest).mockImplementation(
       async (_request: NewRequest, _strict: boolean) => {
+        return Promise.resolve({
+          id: '1',
+        });
+      }
+    );
+    vi.mocked(mocks.requestDetails)
+      .mockResolvedValueOnce({ state: 'new', result: null })
+      .mockResolvedValueOnce({ state: 'queued', result: null })
+      .mockResolvedValueOnce({ state: 'pending', result: null })
+      .mockResolvedValueOnce({ state: 'running', result: null })
+      .mockResolvedValueOnce({
+        state: 'complete',
+        result: { overall: 'passed', summary: '\\o/' },
+      });
+
+    // Run action
+    const octokit = new Octokit({ auth: 'mock-token' });
+    const pr = await PullRequest.initialize(1, octokit);
+
+    await action(pr);
+
+    // Check if we have waited for Testing Farm to finish
+    expect(mocks.requestDetails).toHaveBeenCalledTimes(5);
+
+    // Test outputs
+    expect(process.env['OUTPUT_REQUEST_ID']).toMatchInlineSnapshot('"1"');
+    expect(process.env['OUTPUT_REQUEST_URL']).toMatchInlineSnapshot(
+      '"https://api.dev.testing-farm.io/requests/1"'
+    );
+    expect(process.env['OUTPUT_TEST_LOG_URL']).toMatchInlineSnapshot(
+      '"https://artifacts.dev.testing-farm.io/1"'
+    );
+
+    // First call to request PR details, next two calls for setting the status
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request).toHaveBeenLastCalledWith(
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+      {
+        owner: 'sclorg',
+        pull_number: 1,
+        repo: 'testing-farm-as-github-action',
+      }
+    );
+
+    // Test summary
+    await assertSummary(`<h1>Testing Farm as a GitHub Action summary</h1>
+<table><tr><th>Compose</th><th>Arch</th><th>Infrastructure State</th><th>Test result</th><th>Link to logs</th></tr><tr><td>${process.env['INPUT_COMPOSE']}</td><td>${process.env['INPUT_ARCH']}</td><td>OK</td><td>success</td><td>[pipeline.log](https://artifacts.dev.testing-farm.io/1/pipeline.log)</td></tr></table>
+`);
+
+    expect(mocks.TFError).not.toHaveBeenCalled();
+  });
+
+  test('Hardware test', async () => {
+    setDefaultInputs();
+    // Mock required Action inputs
+    // api_key - A testing farm server api key
+    vi.stubEnv('INPUT_API_KEY', 'abcdef-123456');
+    // git_url - An url to the GIT repository
+    vi.stubEnv(
+      'INPUT_GIT_URL',
+      'https://github.com/sclorg/testing-farm-as-github-action'
+    );
+    // tmt_plan_regex - A tmt plan regex which will be used for selecting plans. By default all plans are selected
+    vi.stubEnv('INPUT_TMT_PLAN_REGEX', 'fedora');
+    vi.stubEnv('INPUT_HARDWARE', '{"memory": ">= 8 GB"}');
+
+    // Mock Testing Farm API
+    vi.mocked(mocks.unsafeNewRequest).mockImplementation(
+      async (_request: unknown) => {
+        return Promise.resolve({
+          id: '1',
+        });
+      }
+    );
+    vi.mocked(mocks.requestDetails)
+      .mockResolvedValueOnce({ state: 'new', result: null })
+      .mockResolvedValueOnce({ state: 'queued', result: null })
+      .mockResolvedValueOnce({ state: 'pending', result: null })
+      .mockResolvedValueOnce({ state: 'running', result: null })
+      .mockResolvedValueOnce({
+        state: 'complete',
+        result: { overall: 'passed', summary: '\\o/' },
+      });
+
+    // Run action
+    const octokit = new Octokit({ auth: 'mock-token' });
+    const pr = await PullRequest.initialize(1, octokit);
+
+    await action(pr);
+
+    // Check if we have waited for Testing Farm to finish
+    expect(mocks.requestDetails).toHaveBeenCalledTimes(5);
+
+    // Test outputs
+    expect(process.env['OUTPUT_REQUEST_ID']).toMatchInlineSnapshot('"1"');
+    expect(process.env['OUTPUT_REQUEST_URL']).toMatchInlineSnapshot(
+      '"https://api.dev.testing-farm.io/requests/1"'
+    );
+    expect(process.env['OUTPUT_TEST_LOG_URL']).toMatchInlineSnapshot(
+      '"https://artifacts.dev.testing-farm.io/1"'
+    );
+
+    // First call to request PR details, next two calls for setting the status
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request).toHaveBeenLastCalledWith(
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+      {
+        owner: 'sclorg',
+        pull_number: 1,
+        repo: 'testing-farm-as-github-action',
+      }
+    );
+
+    // Test summary
+    await assertSummary(`<h1>Testing Farm as a GitHub Action summary</h1>
+<table><tr><th>Compose</th><th>Arch</th><th>Infrastructure State</th><th>Test result</th><th>Link to logs</th></tr><tr><td>${process.env['INPUT_COMPOSE']}</td><td>${process.env['INPUT_ARCH']}</td><td>OK</td><td>success</td><td>[pipeline.log](https://artifacts.dev.testing-farm.io/1/pipeline.log)</td></tr></table>
+`);
+
+    expect(mocks.TFError).not.toHaveBeenCalled();
+  });
+
+  test('Hardware test - wrong JSON', async () => {
+    setDefaultInputs();
+
+    // Mock required Action inputs
+    // api_key - A testing farm server api key
+    vi.stubEnv('INPUT_API_KEY', 'abcdef-123456');
+    // git_url - An url to the GIT repository
+    vi.stubEnv(
+      'INPUT_GIT_URL',
+      'https://github.com/sclorg/testing-farm-as-github-action'
+    );
+    // tmt_plan_regex - A tmt plan regex which will be used for selecting plans. By default all plans are selected
+    vi.stubEnv('INPUT_TMT_PLAN_REGEX', 'fedora');
+    vi.stubEnv('INPUT_HARDWARE', '{"memory":}');
+
+    // Mock Testing Farm API
+    vi.mocked(mocks.newRequest).mockImplementation(
+      async (_request: NewRequest) => {
         return Promise.resolve({
           id: '1',
         });

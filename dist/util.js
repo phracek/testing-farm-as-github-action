@@ -13,4 +13,13 @@ export function getSummary(result) {
         .safeParse(result);
     return parsedResult.success ? ` - ${parsedResult.data.summary}` : '';
 }
+export function isJsonString(hardware) {
+    try {
+        JSON.parse(hardware);
+    }
+    catch (e) {
+        return false;
+    }
+    return true;
+}
 //# sourceMappingURL=util.js.map

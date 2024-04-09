@@ -76,8 +76,8 @@ async function action(pr: PullRequest): Promise<void> {
   // https://gitlab.com/testing-farm/docs/root/-/merge_requests/120/diffs?view=inline
 
   const tmtHardwareParsed = isJsonString(getInput('tmt_hardware'));
-  const tmtHardware = tmtHardwareParsed == true
-    ? JSON.parse(getInput('tmt_hardware')) : {};
+  const tmtHardware =
+    tmtHardwareParsed == true ? JSON.parse(getInput('tmt_hardware')) : {};
 
   // Generate tmt context
   const tmtContextParsed = tmtContextInputSchema.safeParse(
@@ -122,7 +122,6 @@ async function action(pr: PullRequest): Promise<void> {
         settings: envSettings,
         secrets: tmtEnvSecrets,
         artifacts: tmtArtifacts,
-        hardware: tmtHardware,
         tmt: {
           ...(tmtContext ? { context: tmtContext } : {}),
         },
@@ -130,8 +129,17 @@ async function action(pr: PullRequest): Promise<void> {
     ],
   };
 
-  // The strict mode should be enabled once https://github.com/redhat-plumbers-in-action/testing-farm/issues/71 is fixed
-  const tfResponseRaw = await api.newRequest(request, false);
+  let tfResponseRaw;
+  // Use newRequest method in case tmt_hardware is not defined or parameter is not properly formatted
+  if (tmtHardwareParsed === false || getInput('tmt_hardware') === '') {
+    tfResponseRaw = await api.newRequest(request, false);
+  } else {
+    // The strict mode should be enabled once https://github.com/redhat-plumbers-in-action/testing-farm/issues/71 is fixed
+    tfResponseRaw = await api.unsafeNewRequest({
+      ...request,
+      environments: [{ ...request.environments[0], hardware: tmtHardware }],
+    });
+  }
 
   // Remove all secrets from request before printing it
   delete (request as Partial<typeof request>).api_key;

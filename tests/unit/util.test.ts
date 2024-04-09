@@ -1,6 +1,10 @@
 import { test, expect, describe } from 'vitest';
 
-import { composeStatusDescription, getSummary } from '../../src/util';
+import {
+  composeStatusDescription,
+  getSummary,
+  isJsonString,
+} from '../../src/util';
 
 describe('Utility functions', () => {
   test('composeStatusDescription', () => {
@@ -39,5 +43,24 @@ describe('Utility functions', () => {
 
     summary = getSummary({ summary: 'tf summary message' });
     expect(summary).toMatchInlineSnapshot('" - tf summary message"');
+  });
+  test('isJsonString', () => {
+    let hardware = '{"key1": "value1", "key2": "value2"}';
+    let result = false;
+
+    result = isJsonString('');
+    expect(result).toEqual(false);
+
+    result = isJsonString(undefined);
+    expect(result).toEqual(false);
+
+    result = isJsonString({});
+    expect(result).toEqual(false);
+
+    result = isJsonString(hardware);
+    expect(result).toEqual(true);
+
+    result = isJsonString('{"something": }');
+    expect(result).toEqual(false);
   });
 });
